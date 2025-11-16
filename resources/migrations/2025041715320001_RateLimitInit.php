@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Migration;
 
-use App\Entity\RateLimit;
+use Lyrasoft\Throttle\Entity\RateLimit;
 use Windwalker\Core\Migration\AbstractMigration;
 use Windwalker\Core\Migration\MigrateDown;
 use Windwalker\Core\Migration\MigrateUp;
