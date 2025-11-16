@@ -21,7 +21,8 @@ class ThrottlePackage extends AbstractPackage implements ServiceProviderInterfac
 {
     public function install(PackageInstaller $installer): void
     {
-        //
+        $installer->installConfig(static::path('etc/*.php'), 'config');
+        $installer->installMigrations(static::path('resources/migrations/**/*'), 'migrations');
     }
 
     public function register(Container $container): void
