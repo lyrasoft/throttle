@@ -47,6 +47,32 @@ class ThrottleService
      * @param  bool                           $autoRelease
      * @param  PersistingStoreInterface|null  $store
      *
+     * @return  array{ SharedLockInterface, Key }
+     */
+    public function concurrentBlocking(
+        string $id,
+        int $concurrent = 1,
+        ?float $ttl = 300.0,
+        bool $autoRelease = true,
+        ?PersistingStoreInterface $store = null
+    ): ?array {
+        $i = random_int(1, $concurrent);
+
+        $key = new Key($id . '@' . $i);
+        $lock = $this->createLockFromKey($key, $ttl, $autoRelease, $store);
+
+        $lock->acquire(true);
+
+        return [$lock, $key];
+    }
+
+    /**
+     * @param  string                         $id
+     * @param  int                            $concurrent
+     * @param  float|null                     $ttl
+     * @param  bool                           $autoRelease
+     * @param  PersistingStoreInterface|null  $store
+     *
      * @return  array{ SharedLockInterface, Key }|null
      */
     public function concurrent(
