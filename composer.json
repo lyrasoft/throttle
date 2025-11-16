@@ -4,15 +4,9 @@
     "type": "windwalker-package",
     "require": {
         "php": ">=8.4.6",
-        "windwalker/core": "^4.2"
-    },
-    "require-dev": {
-        "symfony/rate-limiter": "^8.0@RC",
-        "symfony/lock": "^8.0@RC"
-    },
-    "suggest": {
-        "symfony/rate-limiter": "To support rate limiter.",
-        "symfony/lock": "To support lock."
+        "windwalker/core": "^4.2",
+        "symfony/rate-limiter": "^6.0||^7.0||^8.0||^9.0",
+        "symfony/lock": "^6.0||^7.0||^8.0||^9.0"
     },
     "license": "MIT",
     "autoload": {
@@ -26,5 +20,12 @@
             "email": "asika32764@gmail.com"
         }
     ],
-    "minimum-stability": "beta"
+    "minimum-stability": "beta",
+    "extra": {
+        "windwalker": {
+            "packages": [
+                "Lyrasoft\\Throttle\\ThrottlePackage"
+            ]
+        }
+    }
 }
