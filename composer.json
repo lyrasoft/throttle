@@ -1,0 +1,30 @@
+{
+    "name": "lyrasoft/throttle",
+    "description": "LYRASOFT throttle package",
+    "type": "windwalker-package",
+    "require": {
+        "php": ">=8.4.6",
+        "windwalker/core": "^4.2"
+    },
+    "require-dev": {
+        "symfony/rate-limiter": "^8.0@RC",
+        "symfony/lock": "^8.0@RC"
+    },
+    "suggest": {
+        "symfony/rate-limiter": "To support rate limiter.",
+        "symfony/lock": "To support lock."
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Lyrasoft\\Throttle\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Simon Asika",
+            "email": "asika32764@gmail.com"
+        }
+    ],
+    "minimum-stability": "beta"
+}
