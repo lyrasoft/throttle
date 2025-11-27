@@ -8,11 +8,16 @@ use Lyrasoft\Throttle\Entity\RateLimit;
 use Symfony\Component\RateLimiter\LimiterStateInterface;
 use Symfony\Component\RateLimiter\Storage\StorageInterface;
 use Windwalker\Core\DateTime\Chronos;
+use Windwalker\Database\DatabaseAdapter;
 use Windwalker\ORM\ORM;
 
 class RateLimitDbStorage implements StorageInterface
 {
-    public function __construct(protected ORM $orm)
+    protected ORM $orm {
+        get => $this->db->orm();
+    }
+
+    public function __construct(#[\SensitiveParameter] protected DatabaseAdapter $db)
     {
     }
 
@@ -26,7 +31,7 @@ class RateLimitDbStorage implements StorageInterface
 
                 /** @var ?RateLimit $item */
                 $item = $this->orm->from(RateLimit::class)
-                    ->where('id', $id)
+                    ->where('key', $id)
                     ->forUpdate()
                     ->get(RateLimit::class);
 
@@ -34,7 +39,7 @@ class RateLimitDbStorage implements StorageInterface
 
                 if ($isNew) {
                     $item = new RateLimit();
-                    $item->id = $id;
+                    $item->key = $id;
                 }
 
                 $item->payload = [
@@ -63,7 +68,7 @@ class RateLimitDbStorage implements StorageInterface
     {
         /** @var ?RateLimit $item */
         $item = $this->orm->from(RateLimit::class)
-            ->where('id', $limiterStateId)
+            ->where('key', $limiterStateId)
             ->get(RateLimit::class);
 
         if (!$item) {
@@ -82,7 +87,7 @@ class RateLimitDbStorage implements StorageInterface
     public function delete(string $limiterStateId): void
     {
         $this->orm->delete(RateLimit::class)
-            ->where('id', $limiterStateId)
+            ->where('key', $limiterStateId)
             ->execute();
     }
 

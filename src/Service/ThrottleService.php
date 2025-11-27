@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Lyrasoft\Throttle\Factory;
+namespace Lyrasoft\Throttle\Service;
 
 use Lyrasoft\Throttle\Enum\RateLimitPolicy;
 use Lyrasoft\Throttle\Lock\LockDbStore;
@@ -16,7 +16,9 @@ use Symfony\Component\RateLimiter\Policy\Rate;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\StorageInterface;
 use Windwalker\Core\Application\ApplicationInterface;
+use Windwalker\DI\Attributes\Service;
 
+#[Service]
 class ThrottleService
 {
     public function __construct(protected ApplicationInterface $app)

@@ -17,9 +17,12 @@ return new /** 2025070307320001_LockKeyInit */ class extends AbstractMigration {
         $this->createTable(
             LockKey::class,
             function (Schema $schema) {
-                $schema->varchar('id')->length(64)->primary(true);
+                $schema->primaryBigint('id');
+                $schema->binary('key')->length(32);
                 $schema->varchar('token')->length(44);
                 $schema->integer('expiration');
+
+                $schema->addUniqueKey('key');
             }
         );
     }

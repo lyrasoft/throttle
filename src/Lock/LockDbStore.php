@@ -12,17 +12,25 @@ use Symfony\Component\Lock\Exception\LockConflictedException;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\ExpiringStoreTrait;
-use Windwalker\Core\Database\ORMAwareTrait;
+use Windwalker\Database\DatabaseAdapter;
 use Windwalker\Database\Exception\DatabaseQueryException;
+use Windwalker\ORM\ORM;
 use Windwalker\Query\Query;
 
 class LockDbStore implements PersistingStoreInterface
 {
     use ExpiringStoreTrait;
-    use ORMAwareTrait;
 
-    public function __construct(protected float $gcProbability = 0.01, protected int $initialTtl = 300)
-    {
+    protected ORM $orm {
+        get => $this->db->orm();
+    }
+
+    public function __construct(
+        #[\SensitiveParameter]
+        protected DatabaseAdapter $db,
+        protected float $gcProbability = 0.01,
+        protected int $initialTtl = 300
+    ) {
         if ($gcProbability < 0 || $gcProbability > 1) {
             throw new InvalidArgumentException(
                 \sprintf(
@@ -49,15 +57,24 @@ class LockDbStore implements PersistingStoreInterface
         $key->reduceLifetime($this->initialTtl);
 
         $item = new LockKey();
-        $item->id = $this->getHashedKey($key);
+        $item->key = $this->getHashedKey($key);
         $item->token = $this->getUniqueToken($key);
         $item->expiration = time();
 
-        try {
-            $this->orm->createOne($item);
-        } catch (DatabaseQueryException) {
-            $this->putOffExpiration($key, $this->initialTtl);
-        }
+        $this->orm->transaction(
+            function () use ($key, $item) {
+                $exists = $this->orm->from(LockKey::class)
+                    ->where('key', $item->key)
+                    ->forUpdate()
+                    ->get();
+
+                if (!$exists) {
+                    $this->orm->createOne($item);
+                } else {
+                    $this->putOffExpiration($key, $this->initialTtl);
+                }
+            }
+        );
 
         $this->randomlyPrune();
         $this->checkNotExpired($key);
@@ -66,7 +83,7 @@ class LockDbStore implements PersistingStoreInterface
     public function delete(Key $key): void
     {
         $this->orm->delete(LockKey::class)
-            ->where('id', $this->getHashedKey($key))
+            ->where('key', $this->getHashedKey($key))
             ->where('token', $this->getUniqueToken($key))
             ->execute();
     }
@@ -74,7 +91,7 @@ class LockDbStore implements PersistingStoreInterface
     public function exists(Key $key): bool
     {
         $exists = $this->orm->from(LockKey::class)
-            ->where('id', $this->getHashedKey($key))
+            ->where('key', $this->getHashedKey($key))
             ->where('token', $this->getUniqueToken($key))
             ->where('expiration', '>', time())
             ->get();
@@ -102,7 +119,7 @@ class LockDbStore implements PersistingStoreInterface
         $exists = $this->orm->update(LockKey::class)
             ->set('expiration', $now + $ttl)
             ->set('token', $token)
-            ->where('id', $this->getHashedKey($key))
+            ->where('key', $this->getHashedKey($key))
             ->orWhere(
                 function (Query $query) use ($now, $token) {
                     $query->where('token', $token)
@@ -120,7 +137,7 @@ class LockDbStore implements PersistingStoreInterface
 
     private function getHashedKey(Key $key): string
     {
-        return hash('sha256', (string) $key);
+        return (string) hex2bin(hash('sha256', (string) $key));
     }
 
     /**

@@ -17,12 +17,13 @@ return new /** 2025041715320001_RateLimitInit */ class extends AbstractMigration
         $this->createTable(
             RateLimit::class,
             function (Schema $schema) {
-                $schema->varchar('id');
+                $schema->primaryBigint('id');
+                $schema->varchar('key');
                 $schema->json('payload');
                 $schema->datetime('expired_at');
                 $schema->json('params');
 
-                $schema->addUniqueKey('id');
+                $schema->addUniqueKey('key');
                 $schema->addIndex('expired_at');
             }
         );
