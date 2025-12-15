@@ -109,7 +109,7 @@ if ($lock) {
 
 Please see Symfony [RateLimiter documentation](https://symfony.com/doc/current/rate_limiter.html) to learn basic usage.
 
-Get RateLimiter Factpory and create limiter
+Get RateLimiter Factory and create limiter
 
 ```php
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
@@ -213,11 +213,36 @@ $limiter = $throttleService->createRateLimiter(
 );
 
 $limiter = $throttleService->createRateLimiter(
-    'search.action', // Onlt factory ID, use default limiter ID
+    'search.action', // Only factory ID, use default limiter ID
     \Lyrasoft\Throttle\Enum\RateLimitPolicy::FIXED_WINDOW,
     5,
     '10 minutes',
     true,
+);
+```
+
+## Token Bucket Limiter
+
+TokenBucket Limiter requires interval parameter to be `Rate` object. You can use helper 
+function `\Lyrasoft\Throttle\rate()` to create Rate object or directly use `new Rate(...)`.
+
+```php
+$throttleService = $app->retrieve(\Lyrasoft\Throttle\Factory\ThrottleService::class);
+
+// Using helper function
+$rate = \Lyrasoft\Throttle\rate(interval: '1minutes', amount: 5); // 5 tokens per 1 minute
+
+// Or directly create Rate object
+$rate = new \Symfony\Component\RateLimiter\Rate(
+    refillTime: \DateInterval::createFromDateString('1 minutes'),
+    refillAmount: 5,
+);
+
+$limiter = $throttleService->createRateLimiter(
+    id: 'user.' . $user->id . '::video.stream',
+    policy: \Lyrasoft\Throttle\Enum\RateLimitPolicy::TOKEN_BUCKET,
+    limit: 5,
+    interval: $rate,
 );
 ```
 

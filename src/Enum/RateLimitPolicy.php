@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Lyrasoft\Throttle\Enum;
 
-enum RateLimitPolicy: string
+enum RateLimitPolicy
 {
-    case FIXED_WINDOW = 'fixed_window';
-    case TOKEN_BUCKET = 'token_bucket';
-    case SLIDING_WINDOW = 'sliding_window';
-    case NO_LIMIT = 'no_limit';
+    case FIXED_WINDOW;
+    case TOKEN_BUCKET;
+    case SLIDING_WINDOW;
+    case NO_LIMIT;
 }

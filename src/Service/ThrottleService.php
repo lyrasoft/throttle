@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Lyrasoft\Throttle\Service;
 
 use Lyrasoft\Throttle\Enum\RateLimitPolicy;
+use Lyrasoft\Throttle\Factory\RateLimiterFactory;
 use Lyrasoft\Throttle\Lock\LockDbStore;
 use Lyrasoft\Throttle\RateLimiter\RateLimitDbStorage;
 use Symfony\Component\Lock\Key;
@@ -13,7 +14,7 @@ use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\SharedLockInterface;
 use Symfony\Component\RateLimiter\LimiterInterface;
 use Symfony\Component\RateLimiter\Policy\Rate;
-use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\RateLimiter\Storage\StorageInterface;
 use Windwalker\Core\Application\ApplicationInterface;
 use Windwalker\DI\Attributes\Service;
@@ -151,25 +152,28 @@ class ThrottleService
         string|Rate $interval,
         LockFactory|true|null $lockFactory = null,
         ?StorageInterface $storage = null,
-    ): RateLimiterFactory {
+    ): RateLimiterFactoryInterface {
         if ($lockFactory === true) {
             $lockFactory = $this->createLockFactory();
         }
 
         return new RateLimiterFactory(
-            [
-                'id' => $id,
-                'policy' => $policy->value,
-                'limit' => $limit,
-                'interval' => $interval,
-            ],
+            $id,
+            $policy,
+            $limit,
+            $interval,
+            $lockFactory,
             $storage ?? $this->createRateLimiterDbStorage(),
-            $lockFactory
         );
     }
 
     public function createRateLimiterDbStorage(): RateLimitDbStorage
     {
         return $this->app->make(RateLimitDbStorage::class);
+    }
+
+    public static function rate(string|int|\DateInterval $interval, int $amount = 1): Rate
+    {
+        return \Lyrasoft\Throttle\rate($interval, $amount);
     }
 }
