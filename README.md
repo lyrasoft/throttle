@@ -14,7 +14,7 @@ This package implement throttling for Windwalker, using symfony
   * [RateLimiter](#ratelimiter)
     * [Compound Limiters](#compound-limiters)
     * [Manually Create](#manually-create-1)
-  * [Token Bucket Limiter](#token-bucket-limiter)
+    * [Token Bucket Limiter](#token-bucket-limiter)
   * [RateLimitMiddleware](#ratelimitmiddleware)
     * [Custom Factory](#custom-factory)
     * [Custom Limiter](#custom-limiter)

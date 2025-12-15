@@ -12,6 +12,7 @@ use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\SharedLockInterface;
+use Symfony\Component\RateLimiter\CompoundRateLimiterFactory;
 use Symfony\Component\RateLimiter\LimiterInterface;
 use Symfony\Component\RateLimiter\Policy\Rate;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
@@ -157,6 +158,27 @@ class ThrottleService
             $lockFactory,
             $storage ?? $this->getRateLimiterStorage(),
         );
+    }
+
+    /**
+     * @param  iterable<RateLimiterFactoryInterface>  $limiterFactories
+     *
+     * @return  CompoundRateLimiterFactory
+     */
+    public function createCompoundRateLimiterFactory(iterable $limiterFactories): CompoundRateLimiterFactory
+    {
+        return new CompoundRateLimiterFactory($limiterFactories);
+    }
+
+    /**
+     * @param  iterable<RateLimiterFactoryInterface>  $limiterFactories
+     * @param  string|null                            $key
+     *
+     * @return  LimiterInterface
+     */
+    public function createCompoundRateLimiter(iterable $limiterFactories, ?string $key = null): LimiterInterface
+    {
+        return $this->createCompoundRateLimiterFactory($limiterFactories)->create($key);
     }
 
     protected function getRateLimiterStorage(): StorageInterface

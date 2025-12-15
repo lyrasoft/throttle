@@ -8,7 +8,6 @@ use Lyrasoft\Throttle\Enum\RateLimitPolicy;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\RateLimiter\CompoundRateLimiterFactory;
 use Symfony\Component\RateLimiter\Policy\Rate;
-use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
 use Symfony\Component\RateLimiter\Storage\StorageInterface;
@@ -60,14 +59,12 @@ class RateLimiterServiceFactory implements ServiceFactoryInterface
                 }
 
                 return new RateLimiterFactory(
-                    [
-                        'id' => $id,
-                        'policy' => $policy->value,
-                        'limit' => $limit,
-                        'interval' => $interval,
-                    ],
-                    $container->get(StorageInterface::class, tag: $storage),
-                    $lockFactory,
+                    id: $id,
+                    policy: $policy,
+                    limit: $limit,
+                    interval: $interval,
+                    lockFactory: $lockFactory,
+                    storage: $container->get(StorageInterface::class, tag: $storage),
                 );
             }
         );
