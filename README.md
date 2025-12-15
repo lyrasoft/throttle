@@ -37,9 +37,7 @@ php windwalker pkg:install lyrasoft/throttle -t migrations
 
 ## Lock
 
-Please see Symfony [Lock documentation](https://symfony.com/doc/current/components/lock.html) to learn basic usage.
-
-Get Lock Factory and create lock
+Get Lock Factory and create lock, you can modify `etc/packages/throttle.config.php` to configure your lock services.
 
 ```php
 $lockFactory = $container->get(\Symfony\Component\Lock\LockFactory::class);
@@ -49,6 +47,8 @@ $lock = $lockFactory->createLock('user.' . $user->id . '.process', 30); // 30 se
 
 $lock->acquire(true); // Wait until acquired
 ```
+
+Please see Symfony [Lock documentation](https://symfony.com/doc/current/components/lock.html) to learn basic usage.
 
 ### Manually Create
 
@@ -109,7 +109,8 @@ if ($locked) {
 ## Pre-lock and serialize key
 
 If you want to acquire a lock and store it then stop current process, pass this lock to queue or other process,
-you can acquire lock first and serialize the key. (Note: Lock object itself is not serializable)
+so that we can run a long task later, you can acquire lock first and serialize the key. 
+(Note: Lock object itself is not serializable)
 
 ```php
 use Symfony\Component\Lock\Key;
@@ -123,7 +124,7 @@ $lock = $throttleService->createLockFromKey($key, 30, autoRelease: false);
 $lock->acquire();
 
 
-// Then we try to run task to another process, let's store the key.
+// Then we try to run task in another process, let's store the key.
 
 // Push to queue
 $queue->push(new FooJob($key));
@@ -163,9 +164,8 @@ if ($locked) {
 
 ## RateLimiter
 
-Please see Symfony [RateLimiter documentation](https://symfony.com/doc/current/rate_limiter.html) to learn basic usage.
-
-Get RateLimiter Factory and create limiter
+Get RateLimiter Factory and create limiter, you can modify `etc/packages/throttle.config.php` to configure your 
+RateKLimiter services.
 
 ```php
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
@@ -185,7 +185,9 @@ $limit->ensureAccepted(); // Throw exception if not accepted
 
 ```
 
-You can configure limiters in `etc/throttle.config.php` file, for example, this config 
+Please see Symfony [RateLimiter documentation](https://symfony.com/doc/current/rate_limiter.html) to learn basic usage.
+
+You can configure limiters in `etc/packages/throttle.config.php` file, for example, this config 
 set `10` requests per minute limit for `default` limiter.
 
 ```php
