@@ -122,7 +122,7 @@ class ThrottleService
         string $id,
         RateLimitPolicy $policy,
         int $limit,
-        string|Rate $interval,
+        string|\DateInterval|Rate $interval,
         LockFactory|true|null $lockFactory = null,
         ?StorageInterface $storage = null,
     ): LimiterInterface {
@@ -142,7 +142,7 @@ class ThrottleService
         string $id,
         RateLimitPolicy $policy,
         int $limit,
-        string|Rate $interval,
+        string|\DateInterval|Rate $interval,
         LockFactory|true|null $lockFactory = null,
         ?StorageInterface $storage = null,
     ): RateLimiterFactoryInterface {

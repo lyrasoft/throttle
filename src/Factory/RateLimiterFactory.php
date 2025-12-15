@@ -24,7 +24,7 @@ class RateLimiterFactory implements RateLimiterFactoryInterface
         protected string $id,
         protected RateLimitPolicy $policy,
         protected int $limit,
-        protected string|Rate $interval,
+        protected string|\DateInterval|Rate $interval,
         protected LockFactory|true|null $lockFactory = null,
         protected ?StorageInterface $storage = null,
     ) {
