@@ -22,8 +22,17 @@ use Windwalker\DI\Attributes\Service;
 #[Service]
 class ThrottleService
 {
+    public ?\Closure $defaultRateLimiterStorage = null;
+
+    public ?\Closure $defaultLockStore = null;
+
     public function __construct(protected ApplicationInterface $app)
     {
+    }
+
+    public static function createLockKey(string $resource): Key
+    {
+        return new Key($resource);
     }
 
     public function lock(
@@ -50,33 +59,7 @@ class ThrottleService
      * @param  bool                           $autoRelease
      * @param  PersistingStoreInterface|null  $store
      *
-     * @return  array{ SharedLockInterface, Key }
-     */
-    public function concurrentBlocking(
-        string $id,
-        int $concurrent = 1,
-        ?float $ttl = 300.0,
-        bool $autoRelease = true,
-        ?PersistingStoreInterface $store = null
-    ): ?array {
-        $i = random_int(1, $concurrent);
-
-        $key = new Key($id . '@' . $i);
-        $lock = $this->createLockFromKey($key, $ttl, $autoRelease, $store);
-
-        $lock->acquire(true);
-
-        return [$lock, $key];
-    }
-
-    /**
-     * @param  string                         $id
-     * @param  int                            $concurrent
-     * @param  float|null                     $ttl
-     * @param  bool                           $autoRelease
-     * @param  PersistingStoreInterface|null  $store
-     *
-     * @return  array{ SharedLockInterface, Key }|null
+     * @return  array{ SharedLockInterface, Key, int }|null
      */
     public function concurrent(
         string $id,
@@ -90,7 +73,7 @@ class ThrottleService
             $lock = $this->createLockFromKey($key, $ttl, $autoRelease, $store);
 
             if ($lock->acquire()) {
-                return [$lock, $key];
+                return [$lock, $key, $i];
             }
         }
 
@@ -117,7 +100,16 @@ class ThrottleService
 
     public function createLockFactory(?PersistingStoreInterface $store = null): LockFactory
     {
-        return new LockFactory($store ?? $this->createLockDbStore());
+        return new LockFactory($store ?? $this->getLockPersistingStore());
+    }
+
+    public function getLockPersistingStore(): PersistingStoreInterface
+    {
+        if ($this->defaultLockStore) {
+            return ($this->defaultLockStore)();
+        }
+
+        return $this->createLockDbStore();
     }
 
     public function createLockDbStore(): LockDbStore
@@ -163,8 +155,17 @@ class ThrottleService
             $limit,
             $interval,
             $lockFactory,
-            $storage ?? $this->createRateLimiterDbStorage(),
+            $storage ?? $this->getRateLimiterStorage(),
         );
+    }
+
+    protected function getRateLimiterStorage(): StorageInterface
+    {
+        if ($this->defaultRateLimiterStorage) {
+            return ($this->defaultRateLimiterStorage)();
+        }
+
+        return $this->createRateLimiterDbStorage();
     }
 
     public function createRateLimiterDbStorage(): RateLimitDbStorage

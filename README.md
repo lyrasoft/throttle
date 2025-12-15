@@ -89,17 +89,73 @@ if ($lock) {
 
 If you want to limit concurrent processes, you can use `concurrent()` method.
 
-Service will auto append 1 to 5 to your ID to get available locks.
+Service will auto append 1 to 5 to your ID to get available locks and auto acquire.
 
 ```php
 $throttleService = $app->retrieve(\Lyrasoft\Throttle\Factory\ThrottleService::class);
 
-$lock = $throttleService->concurrent('user.concurrent.' . $user->id, 5);
+$acquired = $throttleService->concurrent('user.concurrent.' . $user->id, 5);
 
-if ($lock) {
+if ($locked) {
+    [$lock, $key, $serial] = $acquired;
     // Acquired lock, do your process here...
 
     $lock->release(); // Release lock after process
+} else {
+    // All locks are acquired, wait or skip process
+}
+```
+
+## Pre-lock and serialize key
+
+If you want to acquire a lock and store it then stop current process, pass this lock to queue or other process,
+you can acquire lock first and serialize the key. (Note: Lock object itself is not serializable)
+
+```php
+use Symfony\Component\Lock\Key;
+
+$throttleService = $app->retrieve(\Lyrasoft\Throttle\Factory\ThrottleService::class);
+
+$key = new Key('user.lock.' . $user->id);
+$lock = $throttleService->createLockFromKey($key, 30, autoRelease: false);
+
+// Start to acquire lock but do not process long task here...
+$lock->acquire();
+
+
+// Then we try to run task to another process, let's store the key.
+
+// Push to queue
+$queue->push(new FooJob($key));
+
+// Or serialize then store to DB
+$item->lockKey = serialize($key);
+$orm->updateOne($item);
+```
+
+When you want to run the long task, you can unserialize the key and re-create a lock.
+
+```php
+$key = unserialize($item->lockKey);
+
+$lock = $throttleService->createLockFromKey($key, 30);
+
+// Run task....
+
+$lock->release(); // Release lock after process
+```
+
+If you are running concurrent locks, the key will return with the lock in an array.
+
+```php
+$locked = $throttleService->concurrent('user.concurrent.' . $user->id, 5);
+
+if ($locked) {
+    [$lock, $key, $serial] = $locked;
+    
+    serialize($key);
+    
+    // Store the key...
 } else {
     // All locks are acquired, wait or skip process
 }
