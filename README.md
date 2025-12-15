@@ -10,9 +10,11 @@ This package implement throttling for Windwalker, using symfony
   * [Lock](#lock)
     * [Manually Create](#manually-create)
     * [Concurrent Locking](#concurrent-locking)
+    * [Pre-lock and serialize key](#pre-lock-and-serialize-key)
   * [RateLimiter](#ratelimiter)
     * [Compound Limiters](#compound-limiters)
     * [Manually Create](#manually-create-1)
+  * [Token Bucket Limiter](#token-bucket-limiter)
   * [RateLimitMiddleware](#ratelimitmiddleware)
     * [Custom Factory](#custom-factory)
     * [Custom Limiter](#custom-limiter)
@@ -106,7 +108,7 @@ if ($locked) {
 }
 ```
 
-## Pre-lock and serialize key
+### Pre-lock and serialize key
 
 If you want to acquire a lock and store it then stop current process, pass this lock to queue or other process,
 so that we can run a long task later, you can acquire lock first and serialize the key. 
@@ -279,7 +281,7 @@ $limiter = $throttleService->createRateLimiter(
 );
 ```
 
-## Token Bucket Limiter
+### Token Bucket Limiter
 
 TokenBucket Limiter requires interval parameter to be `Rate` object. You can use helper 
 function `\Lyrasoft\Throttle\rate()` to create Rate object or directly use `new Rate(...)`.
