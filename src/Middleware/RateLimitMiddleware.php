@@ -12,23 +12,42 @@ use Symfony\Component\RateLimiter\Exception\RateLimitExceededException;
 use Symfony\Component\RateLimiter\LimiterInterface;
 use Symfony\Component\RateLimiter\RateLimit;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
-use Windwalker\Core\Application\ApplicationInterface;
+use Windwalker\Core\Application\AppContext;
 use Windwalker\Core\Application\Context\AppRequestInterface;
+use Windwalker\Core\Middleware\RoutingExcludesTrait;
 
 class RateLimitMiddleware implements MiddlewareInterface
 {
+    use RoutingExcludesTrait;
+
     public function __construct(
-        protected ApplicationInterface $app,
-        protected string|RateLimiterFactoryInterface|null $factory = null,
+        protected AppContext $app,
         protected \Closure|string|null $limiterKey,
+        protected string|RateLimiterFactoryInterface|null $factory = null,
         protected \Closure|int $consume = 1,
         protected ?\Closure $exceededHandler = null,
         protected \Closure|bool|null $infoHeaders = null,
+        protected array|string|null $methods = null,
+        protected \Closure|array|null $excludes = null,
     ) {
     }
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
+        if ($this->isExclude()) {
+            return $handler->handle($request);
+        }
+
+        $methods = $this->methods;
+
+        if ($methods !== null) {
+            $methods = array_map('strtoupper', (array) $methods);
+
+            if (!in_array(strtoupper($this->app->getAppRequest()->getMethod()), $methods, true)) {
+                return $handler->handle($request);
+            }
+        }
+
         $factory = $this->getRateLimiterFactory();
         $rateLimiter = $factory->create($key = $this->getRateLimiterKey());
 
@@ -120,5 +139,10 @@ class RateLimitMiddleware implements MiddlewareInterface
             RateLimiterFactoryInterface::class,
             tag: $this->factory
         );
+    }
+
+    public function getExcludes(): mixed
+    {
+        return $this->excludes;
     }
 }
