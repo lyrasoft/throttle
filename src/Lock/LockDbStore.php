@@ -61,20 +61,11 @@ class LockDbStore implements PersistingStoreInterface
         $item->token = $this->getUniqueToken($key);
         $item->expiration = time();
 
-        $this->orm->transaction(
-            function () use ($key, $item) {
-                $exists = $this->orm->from(LockKey::class)
-                    ->where('key', $item->key)
-                    ->forUpdate()
-                    ->get();
-
-                if (!$exists) {
-                    $this->orm->createOne($item);
-                } else {
-                    $this->putOffExpiration($key, $this->initialTtl);
-                }
-            }
-        );
+        try {
+            $this->orm->createOne($item);
+        } catch (DatabaseQueryException) {
+            $this->putOffExpiration($key, $this->initialTtl);
+        }
 
         $this->randomlyPrune();
         $this->checkNotExpired($key);
