@@ -42,12 +42,24 @@ class RateLimiterFactory implements RateLimiterFactoryInterface
         }
 
         return match ($this->policy) {
-            RateLimitPolicy::TOKEN_BUCKET => new TokenBucketLimiter($id, $this->limit, $interval, $this->storage, $lock),
-            RateLimitPolicy::FIXED_WINDOW => new FixedWindowLimiter($id, $this->limit, $interval, $this->storage, $lock),
+            RateLimitPolicy::TOKEN_BUCKET => new TokenBucketLimiter(
+                $id,
+                $this->limit,
+                static::validateRate($interval),
+                $this->storage,
+                $lock
+            ),
+            RateLimitPolicy::FIXED_WINDOW => new FixedWindowLimiter(
+                $id,
+                $this->limit,
+                static::validateInterval($interval),
+                $this->storage,
+                $lock
+            ),
             RateLimitPolicy::SLIDING_WINDOW => new SlidingWindowLimiter(
                 $id,
                 $this->limit,
-                $interval,
+                static::validateInterval($interval),
                 $this->storage,
                 $lock
             ),
@@ -59,5 +71,34 @@ class RateLimiterFactory implements RateLimiterFactoryInterface
                 )
             ),
         };
+    }
+
+    protected static function validateRate(string|\DateInterval|Rate $interval): Rate
+    {
+        if ($interval instanceof \DateInterval) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    'Please provide `%s` as 4th argument for TokenBucket Policy.',
+                    Rate::class,
+                )
+            );
+        }
+
+        if (is_string($interval)) {
+            $interval = Rate::fromString($interval);
+        }
+
+        return $interval;
+    }
+
+    protected static function validateInterval(string|\DateInterval|Rate $interval): string|\DateInterval
+    {
+        if ($interval instanceof Rate) {
+            throw new \InvalidArgumentException(
+                'Please provide string or DateInterval as 4th argument for FixedWindow and SlidingWindow policy.',
+            );
+        }
+
+        return $interval;
     }
 }

@@ -283,14 +283,21 @@ $limiter = $throttleService->createRateLimiter(
 
 ### Token Bucket Limiter
 
-TokenBucket Limiter requires interval parameter to be `Rate` object. You can use helper 
-function `\Lyrasoft\Throttle\rate()` to create Rate object or directly use `new Rate(...)`.
+TokenBucket Limiter has a different configuration:
+- `maxTokens`: The maximum number of tokens in the bucket.
+- `rate`: - The `Rate` represents the token refill speed, composed of `refillTime` and `refillAmount`. 
+  You can define it using a `\Symfony\Component\RateLimiter\Rate` object, or use the string format `1hour-5` 
+  to indicate refilling 5 tokens per hour.
+
+When creating a Token Bucket Limiter, you need to set `limit` as `maxTokens` and `interval` as `rate`.
 
 ```php
 $throttleService = $app->retrieve(\Lyrasoft\Throttle\Factory\ThrottleService::class);
 
+$maxTokens = 500; // Start with 500 tokens
+
 // Using helper function
-$rate = \Lyrasoft\Throttle\rate(interval: '1minutes', amount: 5); // 5 tokens per 1 minute
+$rate = \Lyrasoft\Throttle\rate(interval: '1minutes', amount: 5); // refill 5 tokens per 1 minute
 
 // Or directly create Rate object
 $rate = new \Symfony\Component\RateLimiter\Rate(
@@ -298,12 +305,24 @@ $rate = new \Symfony\Component\RateLimiter\Rate(
     refillAmount: 5,
 );
 
+// Or string format
+$rate = '1hour-5'; // refill 5 tokens per hour
+
 $limiter = $throttleService->createRateLimiter(
     id: 'user.' . $user->id . '::video.stream',
     policy: \Lyrasoft\Throttle\Enum\RateLimitPolicy::TOKEN_BUCKET,
-    limit: 5,
+    limit: $maxTokens,
     interval: $rate,
 );
+
+// Shorthand
+$rate = \Symfony\Component\RateLimiter\Policy\Rate::perSecond(5);
+$rate = \Symfony\Component\RateLimiter\Policy\Rate::perMinute(5);
+$rate = \Symfony\Component\RateLimiter\Policy\Rate::perHour(100);
+$rate = \Symfony\Component\RateLimiter\Policy\Rate::perDay(1000);
+$rate = \Symfony\Component\RateLimiter\Policy\Rate::perMonth(1000);
+$rate = \Symfony\Component\RateLimiter\Policy\Rate::perYear(10000);
+$rate = \Symfony\Component\RateLimiter\Policy\Rate::fromString('1hour-5'); // refill 5 tokens per hour
 ```
 
 ## RateLimitMiddleware
