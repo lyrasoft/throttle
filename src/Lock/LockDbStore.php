@@ -14,8 +14,11 @@ use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\ExpiringStoreTrait;
 use Windwalker\Database\DatabaseAdapter;
 use Windwalker\Database\Exception\DatabaseQueryException;
+use Windwalker\Database\Platform\AbstractPlatform;
 use Windwalker\ORM\ORM;
 use Windwalker\Query\Query;
+
+use function Windwalker\raw;
 
 class LockDbStore implements PersistingStoreInterface
 {
@@ -56,13 +59,15 @@ class LockDbStore implements PersistingStoreInterface
     {
         $key->reduceLifetime($this->initialTtl);
 
-        $item = new LockKey();
-        $item->key = $this->getHashedKey($key);
-        $item->token = $this->getUniqueToken($key);
-        $item->expiration = time();
-
         try {
-            $this->orm->createOne($item);
+            $this->orm->insert(LockKey::class)
+                ->columns('key', 'token', 'expiration')
+                ->values(
+                    $this->getHashedKey($key),
+                    $this->getUniqueToken($key),
+                    raw($this->getCurrentTimestampStatement() . ' + ' . $this->initialTtl)
+                )
+                ->execute();
         } catch (DatabaseQueryException) {
             $this->putOffExpiration($key, $this->initialTtl);
         }
@@ -84,7 +89,7 @@ class LockDbStore implements PersistingStoreInterface
         $exists = $this->orm->from(LockKey::class)
             ->where('key', $this->getHashedKey($key))
             ->where('token', $this->getUniqueToken($key))
-            ->where('expiration', '>', time())
+            ->where('expiration', '>', raw($this->getCurrentTimestampStatement()))
             ->get();
 
         return (bool) $exists;
@@ -159,5 +164,17 @@ class LockDbStore implements PersistingStoreInterface
         ) {
             $this->prune();
         }
+    }
+
+    private function getCurrentTimestampStatement(): string
+    {
+        return match ($this->db->getPlatform()->getName()) {
+            AbstractPlatform::MYSQL => 'UNIX_TIMESTAMP(NOW(6))',
+            AbstractPlatform::SQLITE => "(julianday('now') - 2440587.5) * 86400.0",
+            AbstractPlatform::POSTGRESQL => 'CAST(EXTRACT(epoch FROM NOW()) AS DOUBLE PRECISION)',
+            'oci' => "(CAST(systimestamp AT TIME ZONE 'UTC' AS DATE) - DATE '1970-01-01') * 86400 + TO_NUMBER(TO_CHAR(systimestamp AT TIME ZONE 'UTC', 'SSSSS.FF'))",
+            AbstractPlatform::SQLSERVER => "CAST(DATEDIFF_BIG(ms, '1970-01-01', SYSUTCDATETIME()) AS FLOAT) / 1000.0",
+            default => (new \DateTimeImmutable())->format('U.u'),
+        };
     }
 }
