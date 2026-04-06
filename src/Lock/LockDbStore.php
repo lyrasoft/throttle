@@ -107,7 +107,7 @@ class LockDbStore implements PersistingStoreInterface
         $now = time();
         $token = $this->getUniqueToken($key);
 
-        $exists = $this->orm->update(LockKey::class)
+        $stmt = $this->orm->update(LockKey::class)
             ->set('expiration', $now + $ttl)
             ->set('token', $token)
             ->where('key', $this->getHashedKey($key))
@@ -117,9 +117,9 @@ class LockDbStore implements PersistingStoreInterface
                         ->where('expiration', '<=', $now);
                 }
             )
-            ->get();
+            ->execute();
 
-        if (!$exists && !$this->exists($key)) {
+        if (!$stmt->countAffected() && !$this->exists($key)) {
             throw new LockConflictedException();
         }
 
