@@ -63,9 +63,11 @@ class LockDbStore implements PersistingStoreInterface
             $this->orm->insert(LockKey::class)
                 ->columns('key', 'token', 'expiration')
                 ->values(
-                    $this->getHashedKey($key),
-                    $this->getUniqueToken($key),
-                    raw($this->getCurrentTimestampStatement() . ' + ' . $this->initialTtl)
+                    [
+                        $this->getHashedKey($key),
+                        $this->getUniqueToken($key),
+                        raw($this->getCurrentTimestampStatement() . ' + ' . $this->initialTtl)
+                    ]
                 )
                 ->execute();
         } catch (DatabaseQueryException) {
