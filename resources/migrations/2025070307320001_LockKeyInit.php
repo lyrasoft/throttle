@@ -19,9 +19,10 @@ return new /** 2025070307320001_LockKeyInit */ class extends AbstractMigration {
                 $schema->primaryBigint('id');
                 $schema->binary('key')->length(32);
                 $schema->varchar('token')->length(44);
-                $schema->integer('expiration');
+                $schema->integer('expiration')->nullable(true);
 
                 $schema->addUniqueKey('key');
+                $schema->addIndex('expiration');
             }
         );
     }
