@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Migration;
 
-use Lyrasoft\Throttle\Entity\LockKey;
 use Windwalker\Core\Migration\AbstractMigration;
 use Windwalker\Core\Migration\MigrateDown;
 use Windwalker\Core\Migration\MigrateUp;
@@ -15,7 +14,7 @@ return new /** 2025070307320001_LockKeyInit */ class extends AbstractMigration {
     public function up(): void
     {
         $this->createTable(
-            LockKey::class,
+            'lock_keys',
             function (Schema $schema) {
                 $schema->primaryBigint('id');
                 $schema->binary('key')->length(32);
@@ -30,6 +29,6 @@ return new /** 2025070307320001_LockKeyInit */ class extends AbstractMigration {
     #[MigrateDown]
     public function down(): void
     {
-        $this->dropTables(LockKey::class);
+        $this->dropTables('lock_keys');
     }
 };

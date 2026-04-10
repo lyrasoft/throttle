@@ -17,8 +17,9 @@ use Windwalker\ORM\EntityInterface;
 use Windwalker\ORM\EntityTrait;
 use Windwalker\ORM\Metadata\EntityMetadata;
 
-// phpcs:disable
-// todo: remove this when phpcs supports 8.4
+/**
+ * @deprecated  No-longer use this entity.
+ */
 #[Table('rate_limits', 'rate_limit')]
 #[\AllowDynamicProperties]
 class RateLimit implements EntityInterface

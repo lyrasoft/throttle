@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Migration;
 
-use Lyrasoft\Throttle\Entity\RateLimit;
 use Windwalker\Core\Migration\AbstractMigration;
 use Windwalker\Core\Migration\MigrateDown;
 use Windwalker\Core\Migration\MigrateUp;
@@ -15,7 +14,7 @@ return new /** 2025041715320001_RateLimitInit */ class extends AbstractMigration
     public function up(): void
     {
         $this->createTable(
-            RateLimit::class,
+            'rate_limits',
             function (Schema $schema) {
                 $schema->primaryBigint('id');
                 $schema->varchar('key');
@@ -32,6 +31,6 @@ return new /** 2025041715320001_RateLimitInit */ class extends AbstractMigration
     #[MigrateDown]
     public function down(): void
     {
-        $this->dropTables(RateLimit::class);
+        $this->dropTables('rate_limits');
     }
 };

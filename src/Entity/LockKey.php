@@ -7,13 +7,15 @@ namespace Lyrasoft\Throttle\Entity;
 use Windwalker\ORM\Attributes\AutoIncrement;
 use Windwalker\ORM\Attributes\Column;
 use Windwalker\ORM\Attributes\EntitySetup;
-use Windwalker\ORM\Attributes\JsonSerializer;
 use Windwalker\ORM\Attributes\PK;
 use Windwalker\ORM\Attributes\Table;
 use Windwalker\ORM\EntityInterface;
 use Windwalker\ORM\EntityTrait;
 use Windwalker\ORM\Metadata\EntityMetadata;
 
+/**
+ * @deprecated  No-longer use this entity.
+ */
 #[Table('lock_keys', 'lock_key')]
 #[\AllowDynamicProperties]
 class LockKey implements EntityInterface

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Lyrasoft\Throttle\Lock;
 
-use Lyrasoft\Throttle\Entity\LockKey;
 use Random\RandomException;
 use Symfony\Component\Lock\Exception\InvalidArgumentException;
 use Symfony\Component\Lock\Exception\InvalidTtlException;
@@ -28,11 +27,28 @@ class LockDbStore implements PersistingStoreInterface
         get => $this->db->orm();
     }
 
+    public string $table {
+        get => $this->tableDefine->table;
+    }
+
+    public string $keyField {
+        get => $this->tableDefine->keyField;
+    }
+
+    public string $tokenField {
+        get => $this->tableDefine->tokenField;
+    }
+
+    public string $expirationField {
+        get => $this->tableDefine->expirationField;
+    }
+
     public function __construct(
         #[\SensitiveParameter]
         protected DatabaseAdapter $db,
         protected float $gcProbability = 0.01,
-        protected int $initialTtl = 300
+        protected int $initialTtl = 300,
+        protected LockTableDefine $tableDefine = new LockTableDefine()
     ) {
         if ($gcProbability < 0 || $gcProbability > 1) {
             throw new InvalidArgumentException(
@@ -60,8 +76,12 @@ class LockDbStore implements PersistingStoreInterface
         $key->reduceLifetime($this->initialTtl);
 
         try {
-            $this->orm->insert(LockKey::class)
-                ->columns('key', 'token', 'expiration')
+            $this->orm->insert($this->table)
+                ->columns(
+                    $this->keyField,
+                    $this->tokenField,
+                    $this->expirationField
+                )
                 ->values(
                     [
                         $this->getHashedKey($key),
@@ -80,18 +100,18 @@ class LockDbStore implements PersistingStoreInterface
 
     public function delete(Key $key): void
     {
-        $this->orm->delete(LockKey::class)
-            ->where('key', $this->getHashedKey($key))
-            ->where('token', $this->getUniqueToken($key))
+        $this->orm->delete($this->table)
+            ->where($this->keyField, $this->getHashedKey($key))
+            ->where($this->tokenField, $this->getUniqueToken($key))
             ->execute();
     }
 
     public function exists(Key $key): bool
     {
-        $exists = $this->orm->from(LockKey::class)
-            ->where('key', $this->getHashedKey($key))
-            ->where('token', $this->getUniqueToken($key))
-            ->where('expiration', '>', raw($this->getCurrentTimestampStatement()))
+        $exists = $this->orm->from($this->table)
+            ->where($this->keyField, $this->getHashedKey($key))
+            ->where($this->tokenField, $this->getUniqueToken($key))
+            ->where($this->expirationField, '>', raw($this->getCurrentTimestampStatement()))
             ->get();
 
         return (bool) $exists;
@@ -114,14 +134,14 @@ class LockDbStore implements PersistingStoreInterface
         $now = time();
         $token = $this->getUniqueToken($key);
 
-        $stmt = $this->orm->update(LockKey::class)
-            ->set('expiration', $now + $ttl)
-            ->set('token', $token)
-            ->where('key', $this->getHashedKey($key))
+        $stmt = $this->orm->update($this->table)
+            ->set($this->expirationField, $now + $ttl)
+            ->set($this->tokenField, $token)
+            ->where($this->keyField, $this->getHashedKey($key))
             ->orWhere(
                 function (Query $query) use ($now, $token) {
-                    $query->where('token', $token)
-                        ->where('expiration', '<=', $now);
+                    $query->where($this->tokenField, $token)
+                        ->where($this->expirationField, '<=', $now);
                 }
             )
             ->execute();
@@ -153,8 +173,8 @@ class LockDbStore implements PersistingStoreInterface
 
     private function prune(): void
     {
-        $this->orm->delete(LockKey::class)
-            ->where('expiration', '<=', time())
+        $this->orm->delete($this->table)
+            ->where($this->expirationField, '<=', raw($this->getCurrentTimestampStatement()))
             ->execute();
     }
 

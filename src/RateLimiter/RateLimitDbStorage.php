@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace Lyrasoft\Throttle\RateLimiter;
 
-use Lyrasoft\Throttle\Entity\RateLimit;
 use Symfony\Component\RateLimiter\LimiterStateInterface;
 use Symfony\Component\RateLimiter\Storage\StorageInterface;
-use Windwalker\Core\DateTime\Chronos;
 use Windwalker\Database\DatabaseAdapter;
 use Windwalker\Database\Platform\AbstractPlatform;
 use Windwalker\ORM\ORM;
-use Windwalker\Query\Bounded\ParamType;
 use Windwalker\Query\Query;
+
+use function Windwalker\raw;
 
 class RateLimitDbStorage implements StorageInterface
 {
@@ -20,8 +19,27 @@ class RateLimitDbStorage implements StorageInterface
         get => $this->db->orm();
     }
 
-    public function __construct(#[\SensitiveParameter] protected DatabaseAdapter $db)
-    {
+    public string $table {
+        get => $this->tableDefine->table;
+    }
+
+    public string $keyField {
+        get => $this->tableDefine->keyField;
+    }
+
+    public string $payloadField {
+        get => $this->tableDefine->payloadField;
+    }
+
+    public string $expiredAtField {
+        get => $this->tableDefine->expiredAtField;
+    }
+
+    public function __construct(
+        #[\SensitiveParameter] protected DatabaseAdapter $db,
+        protected float $gcProbability = 0.01,
+        protected RateLimitTableDefine $tableDefine = new RateLimitTableDefine()
+    ) {
     }
 
     public function save(LimiterStateInterface $limiterState): void
@@ -33,170 +51,197 @@ class RateLimitDbStorage implements StorageInterface
             'class' => $limiterState::class,
             'body' => mb_convert_encoding(\serialize($limiterState), 'UTF-8', 'auto'),
         ];
-        $expiredAt = null;
+
+        $payload = json_encode($payload);
+        $expiredAt = 'NULL';
 
         if ($limiterState->getExpirationTime()) {
-            $microtime = microtime(true) + $limiterState->getExpirationTime();
+            $expiredAt = $this->getCurrentTimestampStatement() . ' + ' . $limiterState->getExpirationTime();
 
-            $expiredAt = Chronos::createFromFormat('U.u', (string) $microtime);
+            $expiredAt = $this->convertToUnix($expiredAt);
         }
 
         // Upsert
         $upsertSql = $this->upsertSql($key, $payload, $expiredAt);
 
         if ($upsertSql) {
-             $upsertSql->execute();
+            $upsertSql->execute();
 
-             return;
+            return;
         }
 
+        // Fallback to traditional php control
         $this->orm->transaction(
             function () use ($expiredAt, $payload, $key) {
-                /** @var ?RateLimit $item */
-                $item = $this->orm->from(RateLimit::class)
-                    ->where('key', $key)
+                $item = $this->orm->from($this->table)
+                    ->where($this->keyField, $key)
                     ->forUpdate()
-                    ->get(RateLimit::class);
+                    ->get();
 
                 $isNew = !$item;
 
                 if ($isNew) {
-                    $item = new RateLimit();
-                    $item->key = $key;
-                }
-
-                $item->payload = $payload;
-                $item->expiredAt = $expiredAt;
-
-                if ($isNew) {
-                    $this->orm->createOne($item);
+                    $this->orm->insert($this->table)
+                        ->columns(
+                            $this->keyField,
+                            $this->payloadField,
+                            $this->expiredAtField,
+                        )
+                        ->values(
+                            [
+                                $key,
+                                $payload,
+                                raw($expiredAt)
+                            ]
+                        )
+                        ->execute();
                 } else {
-                    $this->orm->updateOne($item);
+                    $this->orm->update($this->table)
+                        ->where($this->keyField, $key)
+                        ->set($this->payloadField, $payload)
+                        ->set($this->expiredAtField, raw($expiredAt))
+                        ->execute();
                 }
-
-                return $item;
             }
         );
     }
 
     public function fetch(string $limiterStateId): ?LimiterStateInterface
     {
-        /** @var ?RateLimit $item */
-        $item = $this->orm->from(RateLimit::class)
-            ->where('key', $limiterStateId)
-            ->get(RateLimit::class);
+        $payload = $this->orm->select($this->payloadField)
+            ->from($this->table)
+            ->where($this->keyField, $limiterStateId)
+            // AND (A OR B)
+            ->orWhere(
+                function (Query $query) {
+                    $query->where($this->expiredAtField, null);
+                    $query->where(
+                        $this->expiredAtField,
+                        '>',
+                        raw($this->getCurrentTimestampStatement())
+                    );
+                }
+            )
+            ->result();
 
-        if (!$item) {
+        if (!$payload) {
             return null;
         }
 
-        $limiterState = \unserialize($item->payload['body']);
+        $payload = json_decode($payload, true);
 
-        if ($item->expiredAt && $item->expiredAt->isPast()) {
-            return null;
-        }
-
-        return $limiterState;
+        return \unserialize($payload['body'], ['allowed_classes' => true]);
     }
 
     public function delete(string $limiterStateId): void
     {
-        $this->orm->delete(RateLimit::class)
-            ->where('key', $limiterStateId)
+        $this->orm->delete($this->table)
+            ->where($this->keyField, $limiterStateId)
             ->execute();
     }
 
     protected function clearExpired(): void
     {
-        $this->orm->delete(RateLimit::class)
-            ->where('expired_at', '<', \Windwalker\chronos())
+        if (mt_rand() / mt_getrandmax() >= $this->gcProbability) {
+            return;
+        }
+
+        $this->orm->delete($this->table)
+            ->where($this->expiredAtField, '<', raw($this->getCurrentTimestampStatement()))
             ->execute();
     }
 
-    private function upsertSql(string $key, array $payload, ?\DateTimeInterface $expiredAt): ?Query
+    private function upsertSql(string $key, string $payload, string $expiredAt): ?Query
     {
         $platformName = $this->db->getPlatform()->getName();
 
         $query = $this->db->createQuery();
-        $table = $this->orm->getEntityMetadata(RateLimit::class)->getTableName();
-        $payload = json_encode($payload);
-        $expiredAt = $expiredAt?->format($this->db->getDateFormat());
-        $expiredAtType = $expiredAt === null ? ParamType::NULL : ParamType::STRING;
+
+        $table = $query->quoteName($this->table);
+        $keyField = $query->quoteName($this->tableDefine->keyField);
+        $payloadField = $query->quoteName($this->tableDefine->payloadField);
+        $expiredAtField = $query->quoteName($this->tableDefine->expiredAtField);
 
         switch ($platformName) {
             case AbstractPlatform::MYSQL:
-                $query->bind('key', $key, ParamType::STRING)
-                    ->bind('payload', $payload, ParamType::STRING)
-                    ->bind('expired_at', $expiredAt, $expiredAtType);
+                $query->bind('key', $key);
+                $query->bind('payload', $payload);
 
                 return $query->sql(
-                    $query->format(
-                        "INSERT INTO %n (`key`, `payload`, `expired_at`) VALUES (:key, :payload, :expired_at)
-ON DUPLICATE KEY UPDATE `payload` = VALUES(`payload`), `expired_at` = VALUES(`expired_at`)",
-                        $table,
-                    )
+                    "INSERT INTO $table ($keyField, $payloadField, $expiredAtField) VALUES (:key, :payload, $expiredAt)
+ON DUPLICATE KEY UPDATE $payloadField = VALUES($payloadField), $expiredAtField = VALUES($expiredAtField)"
                 );
 
             case AbstractPlatform::POSTGRESQL:
-                $query->bind('key', $key, ParamType::STRING)
-                    ->bind('payload', $payload, ParamType::STRING)
-                    ->bind('expired_at', $expiredAt, $expiredAtType);
+                $query->bind('key', $key);
+                $query->bind('payload', $payload);
 
                 return $query->sql(
-                    $query->format(
-                        'INSERT INTO lock_keys ("key", "payload", "expired_at") VALUES (:key, :payload, :expired_at)
-ON CONFLICT ("key") DO UPDATE',
-                        $table,
-                    )
+                    "INSERT INTO $table ($keyField, $payloadField, $expiredAtField) 
+VALUES (:key, :payload, $expiredAt) ON CONFLICT ($keyField) DO UPDATE SET
+$payloadField = EXCLUDED.$payloadField, 
+$expiredAtField = EXCLUDED.$expiredAtField
+"
                 );
 
-            case AbstractPlatform::SQLSERVER === $platformName
-                && version_compare(
-                    $this->db->getDriver()->getVersion(),
-                    '10',
-                    '>='
-                ):
-                $query->bind('key1', $key, ParamType::STRING)
-                    ->bind('key2', $key, ParamType::STRING)
-                    ->bind('payload1', $payload, ParamType::STRING)
-                    ->bind('expired_at1', $expiredAt, $expiredAtType)
-                    ->bind('payload2', $payload, ParamType::STRING)
-                    ->bind('expired_at2', $expiredAt, $expiredAtType);
+            case AbstractPlatform::SQLSERVER:
+                if (
+                    version_compare(
+                        $this->db->getDriver()->getVersion(),
+                        '10',
+                        '<'
+                    )
+                ) {
+                    return null;
+                }
+
+                $query->bind('key1', $key);
+                $query->bind('key2', $key);
+                $query->bind('payload1', $payload);
+                $query->bind('payload2', $payload);
 
                 // phpcs:disable
                 // MERGE is only available since SQL Server 2008 and must be terminated by semicolon
                 // It also requires HOLDLOCK according to http://weblogs.sqlteam.com/dang/archive/2009/01/31/UPSERT-Race-Condition-With-MERGE.aspx
                 return $query->sql(
-                    $query->format(
-                        "MERGE INTO %n WITH (HOLDLOCK) USING (SELECT 1 AS dummy) AS src ON (%n = :key1)
-                    WHEN NOT MATCHED THEN INSERT (%n, %n, %n) VALUES (:key2, :payload1, :expired_at1)
-                    WHEN MATCHED THEN UPDATE SET %n = :payload2, %n = :expired_at2;",
-                        $table,
-                        'key',
-                        'key',
-                        'payload',
-                        'expired_at',
-                        'payload',
-                        'expired_at2'
-                    )
+                    "MERGE INTO $table WITH (HOLDLOCK) USING (SELECT 1 AS dummy) AS src ON ($keyField = :key1)
+                    WHEN NOT MATCHED THEN INSERT ($keyField, $payloadField, $expiredAtField) 
+                    VALUES (:key2, :payload1, $expiredAt)
+                    WHEN MATCHED THEN UPDATE SET $payloadField = :payload2, $expiredAtField = $expiredAt;"
                 );
 
             case AbstractPlatform::SQLITE:
-                $query->bind('key', $key, ParamType::STRING)
-                    ->bind('payload', $payload, ParamType::STRING)
-                    ->bind('expired_at', $expiredAt, $expiredAtType);
+                $query->bind('key', $key);
+                $query->bind('payload', $payload);
 
                 return $query->sql(
-                    $query->format(
-                        "INSERT OR REPLACE INTO %n (%n, %n, %n) VALUES (:key, :payload, :expired_at)",
-                        $table,
-                        'key',
-                        'payload',
-                        'expired_at'
-                    )
+                    "INSERT OR REPLACE INTO $table ($keyField, $payloadField, $expiredAtField) 
+                VALUES (:key, :payload, $expiredAt)"
                 );
         }
 
         return null;
+    }
+
+    private function getCurrentTimestampStatement(): string
+    {
+        return match ($this->db->getPlatform()->getName()) {
+            AbstractPlatform::MYSQL => 'UNIX_TIMESTAMP(NOW(6))',
+            AbstractPlatform::SQLITE => "(julianday('now') - 2440587.5) * 86400.0",
+            AbstractPlatform::POSTGRESQL => 'CAST(EXTRACT(epoch FROM NOW()) AS DOUBLE PRECISION)',
+            // 'oci' => "(CAST(systimestamp AT TIME ZONE 'UTC' AS DATE) - DATE '1970-01-01') * 86400 + TO_NUMBER(TO_CHAR(systimestamp AT TIME ZONE 'UTC', 'SSSSS.FF'))",
+            AbstractPlatform::SQLSERVER => "CAST(DATEDIFF_BIG(ms, '1970-01-01', SYSUTCDATETIME()) AS FLOAT) / 1000.0",
+            default => (new \DateTimeImmutable())->format('U.u'),
+        };
+    }
+
+    private function convertToUnix(string $expiredAt): string
+    {
+        return match ($this->db->getPlatform()->getName()) {
+            AbstractPlatform::MYSQL => "FROM_UNIXTIME($expiredAt)",
+            AbstractPlatform::POSTGRESQL => "TO_TIMESTAMP($expiredAt)",
+            AbstractPlatform::SQLSERVER => "DATEADD(SECOND, $expiredAt, '1970-01-01')",
+            AbstractPlatform::SQLITE => "datetime($expiredAt, 'unixepoch')",
+        };
     }
 }
